@@ -211,34 +211,55 @@ def print_parkrun_results_by_date(country, park, event_date):
 		if len(r) == 12: 
 			print(r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9], r[10], r[11], sep='\t')
 			
+
+def results_to_string(results):
+	outstr=''
+	for result in results:
+		for field in result:
+			outstr = outstr + str(field) + '\t'
+		outstr = outstr + '\n'
+	return outstr 	 
+	
+			
 def save_parkrun_results(country, park):
-	events = park_history(country, park)
-	events_num = len(events)
 	dir_name = country
+	if not os.path.isdir(dir_name):
+		print('create directory ', dir_name)
+		os.mkdir(dir_name)
+	if not os.path.isdir(dir_name):
+		print('cannot access directory ', dir_name)
+		return None
 	filename = park + '_results.txt'
 	file_path = os.path.join(dir_name, filename)
+	print('results filename:', file_path)
 	ofs = open(file_path, 'a+')
-	while events_num > 0:
-		test_str = park + '\t' + str(events_num)
-		#results = parkrun_results(country, park, event_num)
-		print_parkrun_results(country, park, events_num)
-		events_num = events_num - 1 
+	ofs.seek(0)
+	saved_results = ofs.read()
+	#print('saved results:\n', saved_results, '\n') 
+	events = park_history(country, park)
+	events_num = len(events)
+	print('save ', events_num, 'results for ', park)
+	for num in range(1, events_num+1):
+		test_str = park + '\t' + str(num) + '\t1'
+		if test_str in saved_results:
+			print('results for ', park, num, ' already saved in ', file_path)
+			continue
+		#print_parkrun_results(country, park, num)
+		resstr = results_to_string(parkrun_results(country, park, num))
+		print('save results for ', park, num, ' in ', file_path)
+		ofs.write(resstr)
+		
+def save_country_results(country):
+	parks = get_all_parks(country)
+	for park in parks:
+		#print('save results for ', park)
+		save_parkrun_results(country, park)
 
-#print_park_history('ru', 'korolev')
-#print_parkrun_results_by_date('ru', 'korolev', '20181020')
+save_country_results('ru')
 
-#print_parkrun_results('ru', 'bitsa', 74)
-#print_parkrun_results('uk', 'Bushy', 206)
+#save_parkrun_results('ru', 'bitsa')
 
-save_parkrun_results('ru', 'purnavolok')
-
-#print_country_history('ru')
-
-#print_park_history('jp', 'odakaryokuchi')
-
-#print_parkrun_results('jp', 'odakaryokuchi', 14)
 	
-
 
 
 
