@@ -42,11 +42,11 @@ def country_url(country):
 			return park[1]
 	return 'https://www.parkrun.org'
 
-def read_url(url):
+def read_url(url, forceReload = False):
 	cache_dir = 'urlcache'
 	file_name = url.replace(':', '_').replace('/', '_').replace('=', '_').replace('?', '_')
 	file_path = os.path.join(cache_dir, file_name)
-	if os.path.exists(file_path):
+	if (not forceReload ) and os.path.exists(file_path):
 		print('reading ',url,' from cache')
 		tmpfile = open(file_path, 'r')
 		return tmpfile.read()
@@ -60,9 +60,9 @@ def read_url(url):
 	print('saving ',url,' to cache as ', file_name)
 	return page
 
-def get_all_parks(country):
+def get_all_parks(country, reloadHistory = False):
 	records_url = country_url(country) + '/results/attendancerecords/'
-	records_page = read_url(records_url)
+	records_page = read_url(records_url, reloadHistory)
 	bs = BeautifulSoup(records_page, 'html.parser')
 	records_table = bs.tbody
 	parks=[]
@@ -85,9 +85,9 @@ def all_countries():
 		print(country, "\t", len(parks))	
 
 
-def park_history(country, park):
+def park_history(country, park, reloadHistory = False):
 	parkurl = country_url(country) + "/" + park + '/results/eventhistory/'
-	history_page = read_url(parkurl)
+	history_page = read_url(parkurl, reloadHistory)
 	bs = BeautifulSoup(history_page, 'html.parser')
 	history_table = bs.tbody
 	events = []
@@ -169,13 +169,13 @@ def parkrun_results(country, park, num):
 						gender_pos=field.findAll('div')[1].contents[0]
 				if best_result == '':
 					best_result = row.findAll('div')[-1].contents[-1]
-				results.append((event_date, park, str(num), pos, 'A'+runner_id, name, time_str, gender_str, gender_pos, age_group, age_grade, best_result))
+				results.append((event_date, park, str(num), pos, 'A'+runner_id, name, time_str, gender_str, gender_pos, age_group, age_grade, best_result, data_runs))
 	return results
 	
 	
-def parkrun_results_by_date(country, park, event_date):
+def parkrun_results_by_date(country, park, event_date, reloadHistory = False):
 	results = []
-	events = park_history(country, park)
+	events = park_history(country, park, reloadHistory)
 	for info in events:
 		if info[0] == event_date:
 			results = parkrun_results(country, park, info[1])
@@ -199,8 +199,8 @@ def print_parkrun_results(country, park, num):
 	for r in results:
 		if len(r) == 5: 
 			print(r[0],r[1],r[2],r[3],r[4],sep='\t')
-		if len(r) == 12: 
-			print(r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9], r[10], r[11], sep='\t')
+		if len(r) == 13: 
+			print(r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9], r[10], r[11], r[12], sep='\t')
 
 
 def print_parkrun_results_by_date(country, park, event_date):
@@ -208,8 +208,8 @@ def print_parkrun_results_by_date(country, park, event_date):
 	for r in results:
 		if len(r) == 5: 
 			print(r[0],r[1],r[2],r[3],r[4],sep='\t')
-		if len(r) == 12: 
-			print(r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9], r[10], r[11], sep='\t')
+		if len(r) == 13: 
+			print(r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9], r[10], r[11], r[12], sep='\t')
 			
 
 def results_to_string(results):
@@ -221,7 +221,7 @@ def results_to_string(results):
 	return outstr 	 
 	
 			
-def save_parkrun_results(country, park):
+def save_parkrun_results(country, park, reloadHistory = False):
 	dir_name = country
 	if not os.path.isdir(dir_name):
 		print('create directory ', dir_name)
@@ -236,7 +236,7 @@ def save_parkrun_results(country, park):
 	ofs.seek(0)
 	saved_results = ofs.read()
 	#print('saved results:\n', saved_results, '\n') 
-	events = park_history(country, park)
+	events = park_history(country, park, reloadHistory)
 	events_num = len(events)
 	print('save ', events_num, 'results for ', park)
 	for num in range(1, events_num+1):
@@ -249,17 +249,41 @@ def save_parkrun_results(country, park):
 		print('save results for ', park, num, ' in ', file_path)
 		ofs.write(resstr)
 		
-def save_country_results(country):
-	parks = get_all_parks(country)
+def save_country_results(country, reloadHistory = False):
+	parks = get_all_parks(country, reloadHistory)
 	for park in parks:
 		#print('save results for ', park)
-		save_parkrun_results(country, park)
+		save_parkrun_results(country, park, reloadHistory)
+		
+def save_results_by_date(country, eventdate):
+	dir_name = country
+	if not os.path.isdir(dir_name):
+		print('create directory ', dir_name)
+		os.mkdir(dir_name)
+	if not os.path.isdir(dir_name):
+		print('cannot access directory ', dir_name)
+		return None
+	filename = str(eventdate) + '_' + country + '_results.txt'
+	file_path = os.path.join(dir_name, filename)
+	ofs = open(file_path, 'w')
+	parks = get_all_parks(country, True)
+	for park in parks :
+		results = parkrun_results_by_date(country, park, eventdate)
+		if not results:
+			results = parkrun_results_by_date(country, park, eventdate, True)
+		if results:
+			print('save results ', park, eventdate)
+			ofs.write(results_to_string(results))
+	ofs.close()
 
-save_country_results('ru')
+print_country_history('ru')
+
+#save_results_by_date('ru', '20210807')
+
+#save_country_results('ru', True)
 
 #save_parkrun_results('ru', 'bitsa')
 
+
 	
-
-
 
