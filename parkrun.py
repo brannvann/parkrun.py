@@ -12,6 +12,8 @@ safe_headers = {
 	'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0'
 }
 
+debug_print = True
+
 def country_url(country):
 	country = country.lower()
 	parks = [ 
@@ -35,7 +37,7 @@ def country_url(country):
 		(['sg', 'singapore', 'сингапур'],'https://www.parkrun.sg'),
 		(['za', 'south africa', 'южная африка'],'https://www.parkrun.co.za'),
 		(['se', 'sweden', 'швеция'],'https://www.parkrun.se'),
-		(['us', 'usa', 'сша'],'https://www.parkrun.us'),
+		(['us', 'usa', 'сша'],'https://www.parkrun.us')
 	]
 	for park in parks:
 		if country in park[0]:
@@ -47,7 +49,8 @@ def read_url(url, forceReload = False):
 	file_name = url.replace(':', '_').replace('/', '_').replace('=', '_').replace('?', '_')
 	file_path = os.path.join(cache_dir, file_name)
 	if (not forceReload ) and os.path.exists(file_path):
-		print('reading ',url,' from cache')
+		if debug_print:
+			print('reading ',url,' from cache')
 		tmpfile = open(file_path, 'r')
 		return tmpfile.read()
 	sleep(0.05 * random.randint(100, 200))
@@ -57,7 +60,8 @@ def read_url(url, forceReload = False):
 	tmpfile = open(file_path, 'w')
 	tmpfile.write(page)
 	tmpfile.close()
-	print('saving ',url,' to cache as ', file_name)
+	if debug_print:
+		print('saving ',url,' to cache as ', file_name)
 	return page
 
 def get_all_parks(country, reloadHistory = False):
@@ -74,15 +78,35 @@ def get_all_parks(country, reloadHistory = False):
 			parkname = (parkref.split('/'))[3]
 			parks.append(parkname)
 	return parks
+	
+def get_latest_parks(country, reloadHistory = False):
+	finishers_url = country_url(country) + '/results/firstfinishers/'
+	finishers_page = read_url(finishers_url, reloadHistory)
+	bs = BeautifulSoup(finishers_page, 'html.parser')
+	finishers_table = bs.tbody
+	parks=[]
+	rows = finishers_table.findAll('tr')
+	for row in rows:
+		refs = row.findAll('a')
+		if len(refs) > 0:
+			parkref = str(refs[0])
+			parkname = (parkref.split('/'))[3]
+			parks.append(parkname)
+	return parks
 
 
 def all_countries():
-	countries = ['Россия', 'Германия', 'Норвегия', 'Англия', 'Австралия', 'Австрия', 
-	'Канада','Дания','Финляндия','Франция', 'Италия','Ирландия', 'Япония','Малайзия', 
-	'Нидерланды','Новая Зеландия', 'Польша','Сингапур', 'Южная Африка','Швеция', 'США', ]
-	for country in countries:
-		parks = get_all_parks(country)
-		print(country, "\t", len(parks))	
+	countries = ['ru', 'de', 'no', 'uk', 'au', 'at', 
+	'ca','dk','fi','fr', 'it','ie', 'jp','my', 
+	'nl','nz', 'pl','sg', 'za','se', 'us' ]
+	return countries 
+	
+		
+def all_parks():
+	parks = []
+	for country in all_countries:
+		parks = parks + get_all_parks(country)
+	return parks
 
 
 def park_history(country, park, reloadHistory = False):
@@ -109,7 +133,8 @@ def country_history(country):
 	events = []
 	parks = get_all_parks(country)
 	for parkname in parks:
-		print(parkname)
+		if debug_print:
+			print(parkname)
 		eventhistory = park_history(country, parkname)
 		if len(eventhistory) > 0 : 
 			events.append((parkname, len(eventhistory), eventhistory[-1][0], eventhistory[0][0]))
@@ -195,22 +220,18 @@ def print_park_history(country, park):
 
 		
 def print_parkrun_results(country, park, num):
-	results = parkrun_results(country, park, num)
-	for r in results:
-		if len(r) == 5: 
-			print(r[0],r[1],r[2],r[3],r[4],sep='\t')
-		if len(r) == 13: 
-			print(r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9], r[10], r[11], r[12], sep='\t')
-
+	for result in parkrun_results(country, park, num):
+		outstr = ''
+		for field in result:
+			outstr = outstr + str(field) + '\t'
+		print(outstr)
 
 def print_parkrun_results_by_date(country, park, event_date):
-	results = parkrun_results_by_date(country, park, event_date)
-	for r in results:
-		if len(r) == 5: 
-			print(r[0],r[1],r[2],r[3],r[4],sep='\t')
-		if len(r) == 13: 
-			print(r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9], r[10], r[11], r[12], sep='\t')
-			
+	for result in parkrun_results_by_date(country, park, event_date):
+		outstr = ''
+		for field in result:
+			outstr = outstr + str(field) + '\t'
+		print(outstr)		
 
 def results_to_string(results):
 	outstr=''
@@ -231,7 +252,8 @@ def save_parkrun_results(country, park, reloadHistory = False):
 		return None
 	filename = park + '_results.txt'
 	file_path = os.path.join(dir_name, filename)
-	print('results filename:', file_path)
+	if debug_print:
+		print('results filename:', file_path)
 	ofs = open(file_path, 'a+')
 	ofs.seek(0)
 	saved_results = ofs.read()
@@ -244,7 +266,6 @@ def save_parkrun_results(country, park, reloadHistory = False):
 		if test_str in saved_results:
 			print('results for ', park, num, ' already saved in ', file_path)
 			continue
-		#print_parkrun_results(country, park, num)
 		resstr = results_to_string(parkrun_results(country, park, num))
 		print('save results for ', park, num, ' in ', file_path)
 		ofs.write(resstr)
@@ -252,10 +273,10 @@ def save_parkrun_results(country, park, reloadHistory = False):
 def save_country_results(country, reloadHistory = False):
 	parks = get_all_parks(country, reloadHistory)
 	for park in parks:
-		#print('save results for ', park)
 		save_parkrun_results(country, park, reloadHistory)
+	
 		
-def save_results_by_date(country, eventdate):
+def create_country_dir(country):
 	dir_name = country
 	if not os.path.isdir(dir_name):
 		print('create directory ', dir_name)
@@ -263,10 +284,33 @@ def save_results_by_date(country, eventdate):
 	if not os.path.isdir(dir_name):
 		print('cannot access directory ', dir_name)
 		return None
+	return dir_name
+	
+		
+def create_date_dir(country):
+	dir_name = create_country_dir(country)
+	if not dir_name:
+		return None
+	dir_name = os.path.join(dir_name, 'date')
+	if not os.path.isdir(dir_name):
+		print('create directory ', dir_name)
+		os.mkdir(dir_name)
+	if not os.path.isdir(dir_name):
+		print('cannot access directory ', dir_name)
+		return None
+	return dir_name
+
+		
+def save_results_by_date(country, eventdate, latest=False):
+	dir_name = create_date_dir(country)
 	filename = str(eventdate) + '_' + country + '_results.txt'
 	file_path = os.path.join(dir_name, filename)
 	ofs = open(file_path, 'w')
-	parks = get_all_parks(country, True)
+	parks = []
+	if latest:
+		parks = get_latest_parks(country, True)
+	else:
+		parks = get_all_parks(country, True)
 	for park in parks :
 		results = parkrun_results_by_date(country, park, eventdate)
 		if not results:
@@ -275,12 +319,10 @@ def save_results_by_date(country, eventdate):
 			print('save results ', park, eventdate)
 			ofs.write(results_to_string(results))
 	ofs.close()
+	
+save_results_by_date('uk', '20210807', True)
 
-print_country_history('ru')
-
-#save_results_by_date('ru', '20210807')
-
-#save_country_results('ru', True)
+#save_country_results('pl', False)
 
 #save_parkrun_results('ru', 'bitsa')
 
