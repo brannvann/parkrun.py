@@ -54,7 +54,7 @@ def read_url(url, forceReload = False):
 			print('reading ',url,' from cache')
 		tmpfile = open(file_path, 'r')
 		return tmpfile.read()
-	sleep(0.05 * random.randint(100, 200))
+	sleep(0.05 * random.randint(70, 130))
 	req = urllib.request.Request( url, data=None, headers=safe_headers)
 	html = urlopen(req)
 	page = str(html.read().decode('utf-8'))
@@ -116,6 +116,18 @@ def park_history(country, park, reloadHistory = False):
 			volunteers = row['data-volunteers']
 			events.append((event_date, event_num, runners, volunteers))
 	return events
+	
+def parkrun_news(country, park):
+	news = []
+	news_url = country_url(country) + "/" + park + "/news/"
+	bs = BeautifulSoup(read_url(news_url), 'html.parser')
+	atricles = bs.findAll('article')
+	for article in atricles:
+		entries = article.findAll(class_ = 'entry-content')
+		for entry in entries:  
+			print(entry) 
+			print('-----------------------------------------------------------')
+	return news	
 	
 	
 def country_history(country):
@@ -314,22 +326,30 @@ def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
 			print('save results ', park, eventdate)
 			ofs.write(results_to_string(results))
 	ofs.close()
+	
 
-#save_results_by_date('no', '20210814')
+#parkrun_news('ru', 'korolev')	
 
-#for event_date in ['20210731', '20210724', '20210717' ]:
-#	for country in all_countries():
-#		save_results_by_date(country, event_date, False, True)
+save_results_by_date('ru', '20210821', True, False)
+save_country_results('ru')
 
+parks = get_all_parks('au')
+for park in parks:
+	save_parkrun_results('au', park)
+	
+for event_date in ['20210821']:
+	for country in all_countries():
+		save_results_by_date(country, event_date, True, False)
 
-for country in ['ru', 'de', 'no', 'fr', 'pl', 'au', 'jp']:
-	save_country_results(country)
+#for country in ['ru', 'au', 'de', 'no', 'fr', 'pl', 'nl', 'it', 'jp']:
+#	save_country_results(country)
 
 #save_results_by_date('ru', '20210807', True)
 
 #save_parkrun_results('fi', 'tampere')
 
 #print_country_history('ru')
+
 
 	
 
