@@ -54,7 +54,7 @@ def read_url(url, forceReload = False):
 			print('reading ',url,' from cache')
 		tmpfile = open(file_path, 'r')
 		return tmpfile.read()
-	sleep(0.05 * random.randint(70, 130))
+	sleep(0.05 * random.randint(40, 80))
 	req = urllib.request.Request( url, data=None, headers=safe_headers)
 	html = urlopen(req)
 	page = str(html.read().decode('utf-8'))
@@ -198,6 +198,31 @@ def parkrun_results(country, park, num):
 				results.append((event_date, park, str(num), pos, 'A'+runner_id, name, time_str, gender_str, gender_pos, age_group, age_grade, best_result, data_runs))
 	return results
 	
+def parkrun_volunteers(country, park, num):
+	volunteers = []
+	event_date = '20210101'
+	results_url = country_url(country) + "/" + park + "/results/weeklyresults/?runSeqNumber=" + str(num)
+	bs = BeautifulSoup(read_url(results_url), 'html.parser')
+	if bs.body.h3:
+		title = bs.body.h3.findAll('span')
+		if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
+			date_str = title[0].contents[0].split('/')
+			event_date = date_str[2]+date_str[1]+date_str[0]
+	ptags = bs.findAll('p')
+	for ptag in ptags:
+		classarrt = ptag.get('class')
+		if classarrt:
+			if 'paddedb' in classarrt:
+				refs = ptag.findAll('a')
+				if refs:
+					for ref in refs:
+						refhref = ref['href']
+						if 'athleteNumber=' in refhref:
+							runner_id = 'A'+refhref.split('=')[1]
+							runner_name = ref.text
+							volunteers.append((event_date, park, str(num), runner_id, runner_name))
+	return volunteers 
+	
 	
 def parkrun_results_by_date(country, park, event_date, reloadHistory = False):
 	results = []
@@ -207,6 +232,17 @@ def parkrun_results_by_date(country, park, event_date, reloadHistory = False):
 			results = parkrun_results(country, park, info[1])
 			break
 	return results
+
+	
+def parkrun_volonteers_by_date(country, park, event_date, reloadHistory = False):
+	volonteers = []
+	events = park_history(country, park, reloadHistory)
+	for info in events:
+		if info[0] == event_date:
+			volonteers = parkrun_volonteers(country, park, info[1])
+			break
+	return volonteers
+
 
 def print_country_history(country):
 	events = country_history(country)
@@ -284,7 +320,7 @@ def save_parkrun_results(country, park, reloadHistory = False):
 		resstr = results_to_string(parkrun_results(country, park, num))
 		print('save results for ', park, num, ' in ', file_path)
 		ofs.write(resstr)
-
+		
 		
 def save_country_results(country, reloadHistory = False):
 	parks = get_all_parks(country, False, reloadHistory)
@@ -304,7 +340,7 @@ def create_date_dir(country):
 		print('cannot access directory ', dir_name)
 		return None
 	return dir_name
-
+	
 		
 def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
 	dir_name = create_date_dir(country)
@@ -326,23 +362,63 @@ def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
 			print('save results ', park, eventdate)
 			ofs.write(results_to_string(results))
 	ofs.close()
+
+def create_volunteers_dir(country):
+	dir_name = create_country_dir(country)
+	if not dir_name:
+		return None
+	dir_name = os.path.join(dir_name, 'volunteers')
+	if not os.path.isdir(dir_name):
+		print('create directory ', dir_name)
+		os.mkdir(dir_name)
+	if not os.path.isdir(dir_name):
+		print('cannot access directory ', dir_name)
+		return None
+	return dir_name	
+	
+def save_parkrun_volunteers(country, park, reloadHistory = False):
+	dir_name = create_volunteers_dir(country)
+	if not dir_name:
+		return None
+	filename = park + '_volunteers.txt'
+	file_path = os.path.join(dir_name, filename)
+	if debug_print:
+		print('volunteer filename:', file_path)
+	ofs = open(file_path, 'a+')
+	ofs.seek(0)
+	saved_volunteers = ofs.read()
+	events = park_history(country, park, reloadHistory)
+	events_num = len(events)
+	print('save ', events_num, 'volunteers for ', park)
+	for num in range(1, events_num+1):
+		test_str = park + '\t' + str(num) + '\tA'
+		if test_str in saved_volunteers:
+			print('volunteers for ', park, num, ' already saved in ', file_path)
+			continue
+		resstr = results_to_string(parkrun_volunteers(country, park, num))
+		if debug_print:
+			print('save volunteers for ', park, num, ' in ', file_path)
+		ofs.write(resstr)	
+		
+def save_country_volunteers(country, reloadHistory = False):
+	parks = get_all_parks(country, False, reloadHistory)
+	for park in parks:
+		save_parkrun_volunteers(country, park, reloadHistory)		
 	
 
-#parkrun_news('ru', 'korolev')	
-
-save_results_by_date('ru', '20210821', True, False)
-save_country_results('ru')
-
-parks = get_all_parks('au')
-for park in parks:
-	save_parkrun_results('au', park)
+for country in all_countries():
+	save_country_results(country)
+	save_country_volunteers(country)
 	
-for event_date in ['20210821']:
-	for country in all_countries():
-		save_results_by_date(country, event_date, True, False)
+#parkrun_news('ru', 'korolev')
 
-#for country in ['ru', 'au', 'de', 'no', 'fr', 'pl', 'nl', 'it', 'jp']:
-#	save_country_results(country)
+#for event_date in ['20210828']:
+#	for country in all_countries():
+#		save_results_by_date(country, event_date, True) 
+
+#parks = get_all_parks('au')
+#for park in parks:
+#	save_parkrun_results('au', park)
 
 #save_results_by_date('ru', '20210807', True)
 
