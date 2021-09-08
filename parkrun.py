@@ -142,11 +142,11 @@ def country_history(country):
 	return events
 	
 	
-def parkrun_results(country, park, num):
+def parkrun_results(country, park, num, reloadResults=False):
 	results = []
 	event_date = '20210101'
 	results_url = country_url(country) + "/" + park + "/results/weeklyresults/?runSeqNumber=" + str(num)
-	bs = BeautifulSoup(read_url(results_url), 'html.parser')
+	bs = BeautifulSoup(read_url(results_url, reloadResults), 'html.parser')
 	if bs.body.h3:
 		title = bs.body.h3.findAll('span')
 		if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
@@ -230,6 +230,8 @@ def parkrun_results_by_date(country, park, event_date, reloadHistory = False):
 	for info in events:
 		if info[0] == event_date:
 			results = parkrun_results(country, park, info[1])
+			if not results:
+				results = parkrun_results(country, park, info[1], True)
 			break
 	return results
 
@@ -318,6 +320,8 @@ def save_parkrun_results(country, park, reloadHistory = False):
 			print('results for ', park, num, ' already saved in ', file_path)
 			continue
 		resstr = results_to_string(parkrun_results(country, park, num))
+		if not resstr:
+			resstr = results_to_string(parkrun_results(country, park, num, True))
 		print('save results for ', park, num, ' in ', file_path)
 		ofs.write(resstr)
 		
@@ -404,7 +408,10 @@ def save_country_volunteers(country, reloadHistory = False):
 	parks = get_all_parks(country, False, reloadHistory)
 	for park in parks:
 		save_parkrun_volunteers(country, park, reloadHistory)		
-	
+
+for event_date in ['20210904']:
+	for country in all_countries():
+		save_results_by_date(country, event_date, True) 	
 
 for country in all_countries():
 	save_country_results(country)
@@ -412,19 +419,6 @@ for country in all_countries():
 	
 #parkrun_news('ru', 'korolev')
 
-#for event_date in ['20210828']:
-#	for country in all_countries():
-#		save_results_by_date(country, event_date, True) 
-
-#parks = get_all_parks('au')
-#for park in parks:
-#	save_parkrun_results('au', park)
-
-#save_results_by_date('ru', '20210807', True)
-
-#save_parkrun_results('fi', 'tampere')
-
-#print_country_history('ru')
 
 
 	
