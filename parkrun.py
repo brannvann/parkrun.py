@@ -85,9 +85,9 @@ def get_all_parks(country, latest = False, reloadHistory = False):
 	
 
 def all_countries():
-	countries = ['ru', 'de', 'no', 'au', 'at', 
+	countries = ['ru', 'de', 'no', 'au', 'at', 'se',
 	'ca','dk','fi','fr', 'it','ie', 'jp','my', 
-	'nl','nz', 'pl','sg', 'za','se', 'us', 'uk' ]
+	'nl','nz', 'pl','sg', 'za', 'us', 'uk' ]
 	return countries 
 	
 		
@@ -281,7 +281,7 @@ def results_to_string(results):
 	return outstr 	 
 	
 	
-def create_country_dir(country):
+def create_country_dir(country, subdirname=None):
 	dir_name = 'countries'
 	if not os.path.isdir(dir_name):
 		print('create directory ', dir_name)
@@ -296,8 +296,24 @@ def create_country_dir(country):
 	if not os.path.isdir(dir_name):
 		print('cannot access directory ', dir_name)
 		return None
+	if subdirname:
+		dir_name = os.path.join(dir_name, subdirname)
+		if not os.path.isdir(dir_name):
+			print('create directory ', dir_name)
+			os.mkdir(dir_name)
+		if not os.path.isdir(dir_name):
+			print('cannot access directory ', dir_name)
+			return None	
 	return dir_name
 	
+
+def create_date_dir(country):
+	return create_country_dir(country, 'date')
+	
+
+def create_volunteers_dir(country):
+	return create_country_dir(country, 'volunteers')
+
 			
 def save_parkrun_results(country, park, reloadHistory = False):
 	dir_name = create_country_dir(country)
@@ -326,60 +342,6 @@ def save_parkrun_results(country, park, reloadHistory = False):
 		ofs.write(resstr)
 		
 		
-def save_country_results(country, reloadHistory = False):
-	parks = get_all_parks(country, False, reloadHistory)
-	for park in parks:
-		save_parkrun_results(country, park, reloadHistory)
-	
-		
-def create_date_dir(country):
-	dir_name = create_country_dir(country)
-	if not dir_name:
-		return None
-	dir_name = os.path.join(dir_name, 'date')
-	if not os.path.isdir(dir_name):
-		print('create directory ', dir_name)
-		os.mkdir(dir_name)
-	if not os.path.isdir(dir_name):
-		print('cannot access directory ', dir_name)
-		return None
-	return dir_name
-	
-		
-def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
-	dir_name = create_date_dir(country)
-	filename = str(eventdate) + '_' + country + '_results.txt'
-	file_path = os.path.join(dir_name, filename)
-	ofs = open(file_path, 'a+')
-	ofs.seek(0)
-	saved_results = ofs.read()
-	parks = get_all_parks(country, latest, latest)
-	for park in parks :
-		test_str = str(eventdate) + '\t' + park
-		if test_str in saved_results:
-			print('results for ', park, eventdate, ' already saved in ', file_path)
-			continue
-		results = parkrun_results_by_date(country, park, eventdate)
-		if (not results) and (not skipNoResults):
-			results = parkrun_results_by_date(country, park, eventdate, True)
-		if results:
-			print('save results ', park, eventdate)
-			ofs.write(results_to_string(results))
-	ofs.close()
-
-def create_volunteers_dir(country):
-	dir_name = create_country_dir(country)
-	if not dir_name:
-		return None
-	dir_name = os.path.join(dir_name, 'volunteers')
-	if not os.path.isdir(dir_name):
-		print('create directory ', dir_name)
-		os.mkdir(dir_name)
-	if not os.path.isdir(dir_name):
-		print('cannot access directory ', dir_name)
-		return None
-	return dir_name	
-	
 def save_parkrun_volunteers(country, park, reloadHistory = False):
 	dir_name = create_volunteers_dir(country)
 	if not dir_name:
@@ -401,25 +363,51 @@ def save_parkrun_volunteers(country, park, reloadHistory = False):
 			continue
 		resstr = results_to_string(parkrun_volunteers(country, park, num))
 		if debug_print:
-			print('save volunteers for ', park, num, ' in ', file_path)
-		ofs.write(resstr)	
+			if resstr:
+				print('save volunteers for ', park, num, ' in ', file_path)
+			else:
+				print('no volunteers for ', park, num)
+		ofs.write(resstr)			
 		
-def save_country_volunteers(country, reloadHistory = False):
+		
+def save_country_results(country, reloadHistory = False):
 	parks = get_all_parks(country, False, reloadHistory)
 	for park in parks:
-		save_parkrun_volunteers(country, park, reloadHistory)		
+		save_parkrun_results(country, park, reloadHistory)
+		save_parkrun_volunteers(country, park, reloadHistory)
+	
+		
+def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
+	dir_name = create_date_dir(country)
+	filename = str(eventdate) + '_' + country + '_results.txt'
+	file_path = os.path.join(dir_name, filename)
+	ofs = open(file_path, 'a+')
+	ofs.seek(0)
+	saved_results = ofs.read()
+	parks = get_all_parks(country, latest, latest)
+	for park in parks :
+		test_str = str(eventdate) + '\t' + park
+		if test_str in saved_results:
+			print('results for ', park, eventdate, ' already saved in ', file_path)
+			continue
+		results = parkrun_results_by_date(country, park, eventdate)
+		if (not results) and (not skipNoResults):
+			results = parkrun_results_by_date(country, park, eventdate, True)
+		if results:
+			print('save results ', park, eventdate)
+			ofs.write(results_to_string(results))
+		else:
+			print('no results for ', park, eventdate)
+	ofs.close()
 
-for event_date in ['20210904']:
-	for country in all_countries():
-		save_results_by_date(country, event_date, True) 	
 
-for country in all_countries():
-	save_country_results(country)
-	save_country_volunteers(country)
+save_country_results('uk')
+
+#for event_date in ['20210911']:
+#	for country in all_countries():
+#		save_results_by_date(country, event_date, True) 	
+
+#for country in all_countries():
+	#save_country_results(country)
 	
 #parkrun_news('ru', 'korolev')
-
-
-
-	
-
