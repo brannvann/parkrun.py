@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from time import sleep
 import random
 import os.path
+from urllib.error import HTTPError
 
 safe_headers = {
 	'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0'
@@ -56,7 +57,12 @@ def read_url(url, forceReload = False):
 		return tmpfile.read()
 	sleep(0.05 * random.randint(40, 80))
 	req = urllib.request.Request( url, data=None, headers=safe_headers)
-	html = urlopen(req)
+	try:
+		html = urlopen(req)
+	except HTTPError as err:
+		print('catch exception in urlopen error code = ' + str(err.code))
+		return None 
+	
 	page = str(html.read().decode('utf-8'))
 	tmpfile = open(file_path, 'w')
 	tmpfile.write(page)
@@ -117,9 +123,9 @@ def park_history(country, park, reloadHistory = False):
 			events.append((event_date, event_num, runners, volunteers))
 	return events
 	
-def parkrun_news(country, park):
+def parkrun_news(country, park, year):
 	news = []
-	news_url = country_url(country) + "/" + park + "/news/"
+	news_url = country_url(country) + "/" + park + "/news/" + str(year)
 	bs = BeautifulSoup(read_url(news_url), 'html.parser')
 	atricles = bs.findAll('article')
 	for article in atricles:
@@ -172,9 +178,12 @@ def parkrun_results(country, park, num, reloadResults=False):
 				refs=row.findAll('a')
 				for ref in refs:
 					refhref = ref['href']
-					if 'athleteNumber=' in refhref:
-						runner_id = refhref.split('=')[1]
+					if 'parkrunner' in refhref:
+						runner_id = refhref.split('/')[-1]
 						break
+					if 'athleteNumber=' in refhref:				# 
+						runner_id = refhref.split('=')[1]		# старый формат
+						break									#
 				fields = row.findAll('td')
 				time_str = ''
 				gender_str = ''
@@ -198,11 +207,11 @@ def parkrun_results(country, park, num, reloadResults=False):
 				results.append((event_date, park, str(num), pos, 'A'+runner_id, name, time_str, gender_str, gender_pos, age_group, age_grade, best_result, data_runs))
 	return results
 	
-def parkrun_volunteers(country, park, num):
+def parkrun_volunteers(country, park, num, reloadVolunteers=False):
 	volunteers = []
 	event_date = '20210101'
 	results_url = country_url(country) + "/" + park + "/results/weeklyresults/?runSeqNumber=" + str(num)
-	bs = BeautifulSoup(read_url(results_url), 'html.parser')
+	bs = BeautifulSoup(read_url(results_url, reloadVolunteers), 'html.parser')
 	if bs.body.h3:
 		title = bs.body.h3.findAll('span')
 		if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
@@ -342,7 +351,7 @@ def save_parkrun_results(country, park, reloadHistory = False):
 		ofs.write(resstr)
 		
 		
-def save_parkrun_volunteers(country, park, reloadHistory = False):
+def save_parkrun_volunteers(country, park, reloadHistory = False, reloadVolunteers=False):
 	dir_name = create_volunteers_dir(country)
 	if not dir_name:
 		return None
@@ -362,6 +371,9 @@ def save_parkrun_volunteers(country, park, reloadHistory = False):
 			print('volunteers for ', park, num, ' already saved in ', file_path)
 			continue
 		resstr = results_to_string(parkrun_volunteers(country, park, num))
+		if not resstr:
+			if reloadVolunteers:
+				resstr = results_to_string(parkrun_volunteers(country, park, num, True)) 
 		if debug_print:
 			if resstr:
 				print('save volunteers for ', park, num, ' in ', file_path)
@@ -370,11 +382,11 @@ def save_parkrun_volunteers(country, park, reloadHistory = False):
 		ofs.write(resstr)			
 		
 		
-def save_country_results(country, reloadHistory = False):
+def save_country_results(country, reloadHistory = False, reloadVolunteers=False):
 	parks = get_all_parks(country, False, reloadHistory)
 	for park in parks:
 		save_parkrun_results(country, park, reloadHistory)
-		save_parkrun_volunteers(country, park, reloadHistory)
+		save_parkrun_volunteers(country, park, reloadHistory, reloadVolunteers)
 	
 		
 def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
@@ -400,14 +412,53 @@ def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
 			print('no results for ', park, eventdate)
 	ofs.close()
 
-
-save_country_results('uk')
-
-#for event_date in ['20210911']:
-#	for country in all_countries():
-#		save_results_by_date(country, event_date, True) 	
-
-#for country in all_countries():
-	#save_country_results(country)
+def remove_results_from_park(country, park, eventdate):
+	dir_name = create_country_dir(country)
+	if not dir_name:
+		return None
+	filename = park + '_results.txt'
+	file_path = os.path.join(dir_name, filename)
+	if debug_print:
+		print('results filename:', file_path)
+	ifs = open(file_path, 'r')
+	results = []
+	for row in ifs:
+		if eventdate not in row:
+			results.append(row)
+	ifs.close()
+	ofs = open(file_path, 'w')
+	for result in results:
+		ofs.write(result)
+	ofs.close()
 	
-#parkrun_news('ru', 'korolev')
+def remove_results_from_country(country, eventdate):
+	parks = get_all_parks(country)
+	for park in parks:
+		remove_results_from_park(country, park, eventdate)
+	dir_name = create_date_dir(country)
+	filename = str(eventdate) + '_' + country + '_results.txt'
+	file_path = os.path.join(dir_name, filename)
+	ofs = open(file_path, 'w')
+	ofs.write('')
+	
+def remove_results_by_date(eventdate):
+	for country in all_countries():
+		remove_results_from_country(country, eventdate)
+		
+
+def main(args):
+	for event_date in ['20211113']:
+		for country in all_countries():
+			save_results_by_date(country, event_date, True) 
+	
+	for country in all_countries():
+		save_country_results(country)
+	
+	#parkrun_news('uk', 'bushy', 2019)
+	return 0
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main(sys.argv))
+	
+
