@@ -153,6 +153,10 @@ def parkrun_results(country, park, num, reloadResults=False):
 	event_date = '20210101'
 	results_url = country_url(country) + "/" + park + "/results/weeklyresults/?runSeqNumber=" + str(num)
 	bs = BeautifulSoup(read_url(results_url, reloadResults), 'html.parser')
+	if (bs is None) or (bs.body is None) or (bs.body.h3 is None):
+		print('cannot read results for ', park, '№', num, ' object is None')
+		return results
+	
 	if bs.body.h3:
 		title = bs.body.h3.findAll('span')
 		if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
@@ -447,7 +451,12 @@ def remove_results_by_date(eventdate):
 		
 
 def main(args):
-	for event_date in ['20211113']:
+	last_event_date='20211204'
+	
+	#print_parkrun_results('ru', 'korolev', 143)
+	#return 0
+	
+	for event_date in [last_event_date]:
 		for country in all_countries():
 			save_results_by_date(country, event_date, True) 
 	
