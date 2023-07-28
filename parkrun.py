@@ -55,7 +55,7 @@ def read_url(url, forceReload = False):
 			print('reading ',url,' from cache')
 		tmpfile = open(file_path, 'r')
 		return tmpfile.read()
-	sleep(0.05 * random.randint(40, 80))
+	sleep(0.05 * random.randint(60, 100))
 	req = urllib.request.Request( url, data=None, headers=safe_headers)
 	try:
 		html = urlopen(req)
@@ -91,9 +91,11 @@ def get_all_parks(country, latest = False, reloadHistory = False):
 	
 
 def all_countries():
-	countries = ['ru', 'de', 'no', 'au', 'at', 'se',
-	'ca','dk','fi','fr', 'it','ie', 'jp','my', 
-	'nl','nz', 'pl','sg', 'za', 'us', 'uk' ]
+	countries = [
+#	'ru', 
+	'it','de', 'no', 'au', 'at', 'se',
+	'ca','dk','fi','fr','jp','my', 
+	'nl','nz', 'pl','sg', 'za', 'us','uk','ie' ]
 	return countries 
 	
 		
@@ -115,12 +117,15 @@ def park_history(country, park, reloadHistory = False):
 	else:
 		rows = history_table.findAll('tr')
 		for row in rows:
+			if not row.attrs:
+				return []
 			event_num = row['data-parkrun']
 			datefmt = row['data-date'].split('/')
 			event_date = datefmt[2]+datefmt[1]+datefmt[0] 
 			runners = row['data-finishers']
 			volunteers = row['data-volunteers']
 			events.append((event_date, event_num, runners, volunteers))
+		pass
 	return events
 	
 def parkrun_news(country, park, year):
@@ -451,17 +456,14 @@ def remove_results_by_date(eventdate):
 		
 
 def main(args):
-	last_event_date='20211204'
-	
-	#print_parkrun_results('ru', 'korolev', 143)
-	#return 0
+	last_event_date='20230722'
 	
 	for event_date in [last_event_date]:
 		for country in all_countries():
 			save_results_by_date(country, event_date, True) 
 	
 	for country in all_countries():
-		save_country_results(country)
+		save_country_results(country, True, True)
 	
 	#parkrun_news('uk', 'bushy', 2019)
 	return 0
