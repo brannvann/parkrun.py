@@ -109,6 +109,8 @@ def all_parks():
 def park_history(country, park, reloadHistory = False):
 	parkurl = country_url(country) + "/" + park + '/results/eventhistory/'
 	history_page = read_url(parkurl, reloadHistory)
+	if not history_page:
+		return []
 	bs = BeautifulSoup(history_page, 'html.parser')
 	history_table = bs.tbody
 	events = []
@@ -456,7 +458,7 @@ def remove_results_by_date(eventdate):
 		
 
 def main(args):
-	last_event_date='20230722'
+	last_event_date='20230909'
 	
 	for event_date in [last_event_date]:
 		for country in all_countries():
