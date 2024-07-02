@@ -8,6 +8,8 @@ from time import sleep
 import random
 import os.path
 from urllib.error import HTTPError
+import argparse
+
 
 safe_headers = {
 	'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0'
@@ -73,20 +75,23 @@ def read_url(url, forceReload = False):
 
 
 def get_all_parks(country, latest = False, reloadHistory = False):
-	park_url = country_url(country) + '/results/attendancerecords/'
-	if latest:
-		park_url = country_url(country) + '/results/firstfinishers/'
+	park_url = country_url(country) + '/special-events/'
+	#if latest:
+	#	park_url = country_url(country) + '/results/firstfinishers/'
 	park_page = read_url(park_url, reloadHistory)
 	bs = BeautifulSoup(park_page, 'html.parser')
 	parks=[]
-	records_table = bs.tbody
-	rows = records_table.findAll('tr')
-	for row in rows:
-		refs = row.findAll('a')
-		if len(refs) > 0:
-			parkref = str(refs[0])
-			parkname = (parkref.split('/'))[3]
-			parks.append(parkname)
+	if records_table := bs.find_all(id='results'):
+		rows = records_table[0].find_all('tr')
+		for row in rows:
+			refs = row.find_all('a')
+			if len(refs) > 0:
+				parkref = str(refs[0])
+				parkname = (parkref.split('/'))[3]
+				parks.append(parkname)
+			pass
+		pass
+	pass
 	return parks
 	
 
@@ -122,8 +127,8 @@ def park_history(country, park, reloadHistory = False):
 			if not row.attrs:
 				return []
 			event_num = row['data-parkrun']
-			datefmt = row['data-date'].split('/')
-			event_date = datefmt[2]+datefmt[1]+datefmt[0] 
+			datefmt = row['data-date'].split('-')
+			event_date = datefmt[0]+datefmt[1]+datefmt[2] 
 			runners = row['data-finishers']
 			volunteers = row['data-volunteers']
 			events.append((event_date, event_num, runners, volunteers))
@@ -158,7 +163,7 @@ def country_history(country):
 def parkrun_results(country, park, num, reloadResults=False):
 	results = []
 	event_date = '20210101'
-	results_url = country_url(country) + "/" + park + "/results/weeklyresults/?runSeqNumber=" + str(num)
+	results_url = country_url(country) + "/" + park + "/results/" + str(num)
 	bs = BeautifulSoup(read_url(results_url, reloadResults), 'html.parser')
 	if (bs is None) or (bs.body is None) or (bs.body.h3 is None):
 		print('cannot read results for ', park, '№', num, ' object is None')
@@ -221,26 +226,31 @@ def parkrun_results(country, park, num, reloadResults=False):
 def parkrun_volunteers(country, park, num, reloadVolunteers=False):
 	volunteers = []
 	event_date = '20210101'
-	results_url = country_url(country) + "/" + park + "/results/weeklyresults/?runSeqNumber=" + str(num)
+	results_url = country_url(country) + "/" + park + "/results/" + str(num)
 	bs = BeautifulSoup(read_url(results_url, reloadVolunteers), 'html.parser')
 	if bs.body.h3:
 		title = bs.body.h3.findAll('span')
 		if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
 			date_str = title[0].contents[0].split('/')
 			event_date = date_str[2]+date_str[1]+date_str[0]
-	ptags = bs.findAll('p')
+	#ptags = bs.findAll('p')
+	ptags = bs.find_all(name='p')
 	for ptag in ptags:
 		classarrt = ptag.get('class')
-		if classarrt:
-			if 'paddedb' in classarrt:
-				refs = ptag.findAll('a')
-				if refs:
-					for ref in refs:
-						refhref = ref['href']
-						if 'athleteNumber=' in refhref:
-							runner_id = 'A'+refhref.split('=')[1]
-							runner_name = ref.text
-							volunteers.append((event_date, park, str(num), runner_id, runner_name))
+		if not classarrt or ( not 'paddedb' in classarrt ):
+			continue
+		pass
+		#refs = ptag.findAll('a')
+		if refs := ptag.findAll('a'):
+			for ref in refs:
+				refhref = ref['href']
+				if 'parkrunner' in refhref:
+					runner_id = 'A'+refhref.split('/')[-1]
+					runner_name = ref.text
+					volunteers.append((event_date, park, str(num), runner_id, runner_name))
+				pass
+			pass
+		pass
 	return volunteers 
 	
 	
@@ -458,14 +468,39 @@ def remove_results_by_date(eventdate):
 		
 
 def main(args):
-	last_event_date='20230909'
+	argparser = argparse.ArgumentParser(description="download parkrun results")
+	argparser.add_argument("--country", help="country results")
+	argparser.add_argument("--date", help="results by date")
+	args = argparser.parse_args()
+	country_results = args.country if args.country else None
+	event_date = args.date if args.date else None
 	
-	for event_date in [last_event_date]:
+	print(f"country={country_results}, date={event_date}")
+	if event_date:
 		for country in all_countries():
-			save_results_by_date(country, event_date, True) 
+			if (not country_results) or (country_results == country):
+				print(f"process country {country} by date {event_date}")
+				save_results_by_date(country, event_date, True)
+				save_country_results(country, False, False)
+			pass
+		pass
+	else:
+		for country in all_countries():
+			if (not country_results) or (country_results == country):
+				print(f"process all results for country {country}")
+				save_country_results(country, True, True)
+			pass
+		pass
+	pass
+
+	# last_event_date='20230923'
 	
-	for country in all_countries():
-		save_country_results(country, True, True)
+	# for event_date in [last_event_date]:
+	# 	for country in all_countries():
+	# 		save_results_by_date(country, event_date, True) 
+	
+	#for country in all_countries():
+	#	save_country_results(country, True, True)
 	
 	#parkrun_news('uk', 'bushy', 2019)
 	return 0
