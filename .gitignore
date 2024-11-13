@@ -2,3 +2,4 @@ countries
 urlcache
 logs
 .vscode/launch.json
+proxies.txt

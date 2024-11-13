@@ -9,7 +9,13 @@ import random
 import os.path
 from urllib.error import HTTPError
 import argparse
+import random
 
+import requests
+from requests.auth import HTTPProxyAuth
+
+
+proxies = []
 
 safe_headers = {
 	'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0'
@@ -64,8 +70,26 @@ def read_url(url, forceReload = False):
 	except HTTPError as err:
 		print('catch exception in urlopen error code = ' + str(err.code))
 		return None 
-	
 	page = str(html.read().decode('utf-8'))
+	
+	# proxy_data = random.choice(proxies) if proxies else None
+	# proxy = {
+	# 	'http' : f"http://{proxy_data['ip']}:{proxy_data['port']}",
+	# 	'https' : f"http://{proxy_data['ip']}:{proxy_data['port']}"
+	# }
+	# auth = HTTPProxyAuth(proxy_data['username'], proxy_data['password'])
+	# s = requests.Session()
+	# s.proxies = proxy
+	# s.auth = auth
+	# s.headers = safe_headers
+	# try:
+	# 	r = s.get(url=url.replace('https:', 'http:'))
+	# 	page2 = str(r.text.decode('utf-8'))
+	# 	print(page2)
+	# except Exception as ex:
+	# 	print(str(ex))
+	# pass
+
 	tmpfile = open(file_path, 'w')
 	tmpfile.write(page)
 	tmpfile.close()
@@ -76,8 +100,6 @@ def read_url(url, forceReload = False):
 
 def get_all_parks(country, latest = False, reloadHistory = False):
 	park_url = country_url(country) + '/special-events/'
-	#if latest:
-	#	park_url = country_url(country) + '/results/firstfinishers/'
 	park_page = read_url(park_url, reloadHistory)
 	bs = BeautifulSoup(park_page, 'html.parser')
 	parks=[]
@@ -162,95 +184,111 @@ def country_history(country):
 	
 def parkrun_results(country, park, num, reloadResults=False):
 	results = []
-	event_date = '20210101'
-	results_url = country_url(country) + "/" + park + "/results/" + str(num)
-	bs = BeautifulSoup(read_url(results_url, reloadResults), 'html.parser')
-	if (bs is None) or (bs.body is None) or (bs.body.h3 is None):
-		print('cannot read results for ', park, '№', num, ' object is None')
-		return results
-	
-	if bs.body.h3:
-		title = bs.body.h3.findAll('span')
-		if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
-			date_str = title[0].contents[0].split('/')
-			event_date = date_str[2]+date_str[1]+date_str[0]
-	
-	results_table = bs.tbody
-	if results_table is None:
-		print('cannot read results for ', park, '№', num)
-	else:
-		rows = results_table.findAll('tr')
-		for row in rows:
-			pos = row['data-position']
-			name = row['data-name']
-			age_group = row['data-agegroup']
-			age_grade = row['data-agegrade']
-			best_result = row['data-achievement']
-			data_runs = row['data-runs']
-			if ( len(data_runs)==0 ) or (data_runs=='0'):
-				results.append((event_date, park, str(num), pos, name))
-			else:
-				runner_id=''
-				refs=row.findAll('a')
-				for ref in refs:
-					refhref = ref['href']
-					if 'parkrunner' in refhref:
-						runner_id = refhref.split('/')[-1]
-						break
-					if 'athleteNumber=' in refhref:				# 
-						runner_id = refhref.split('=')[1]		# старый формат
-						break									#
-				fields = row.findAll('td')
-				time_str = ''
-				gender_str = ''
-				gender_pos = ''
-				for field in fields:
-					if 'Results-table-td--time' in field['class']:
-						if field.contents[0] and field.contents[0].contents:
-							time_str = field.contents[0].contents[0]
-							timebuf = time_str.split(':')
-							if len(timebuf) == 3:
-								minutes = int(timebuf[0])*60 + int(timebuf[1])
-								time_str = str(minutes)+':'+timebuf[2]
-					if 'Results-table-td--F' in field['class']:
-						gender_str = 'F'
-						gender_pos=field.findAll('div')[1].contents[0]
-					if 'Results-table-td--M' in field['class']:
-						gender_str = 'M' 
-						gender_pos=field.findAll('div')[1].contents[0]
-				if best_result == '':
-					best_result = row.findAll('div')[-1].contents[-1]
-				results.append((event_date, park, str(num), pos, 'A'+runner_id, name, time_str, gender_str, gender_pos, age_group, age_grade, best_result, data_runs))
+	try:
+		event_date = '19761220'
+		results_url = country_url(country) + "/" + park + "/results/" + str(num)
+		bs = BeautifulSoup(read_url(results_url, reloadResults), 'html.parser')
+		if (bs is None) or (bs.body is None) or (bs.body.h3 is None):
+			print('cannot read results for ', park, '№', num, ' object is None')
+			return results
+		pass
+		if bs.body.h3:
+			title = bs.body.h3.findAll('span')
+			if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
+				date_str = title[0].contents[0].split('/')
+				event_date = date_str[2]+date_str[1]+date_str[0]
+			pass
+		pass
+		results_table = bs.tbody
+		if results_table is None:
+			print('cannot read results for ', park, '№', num)
+		else:
+			rows = results_table.findAll('tr')
+			for row in rows:
+				pos = row['data-position']
+				name = row['data-name']
+				age_group = row['data-agegroup']
+				age_grade = row['data-agegrade']
+				best_result = row['data-achievement']
+				data_runs = row['data-runs']
+				if ( len(data_runs)==0 ) or (data_runs=='0'):
+					results.append((event_date, park, str(num), pos, name))
+				else:
+					runner_id=''
+					refs=row.findAll('a')
+					for ref in refs:
+						refhref = ref['href']
+						if 'parkrunner' in refhref:
+							runner_id = refhref.split('/')[-1]
+							break
+						pass
+						if 'athleteNumber=' in refhref:				# 
+							runner_id = refhref.split('=')[1]		# старый формат
+							break
+						pass
+					pass									#
+					fields = row.findAll('td')
+					time_str = ''
+					gender_str = ''
+					gender_pos = ''
+					for field in fields:
+						if 'Results-table-td--time' in field['class']:
+							if field.contents[0] and field.contents[0].contents:
+								time_str = field.contents[0].contents[0]
+								timebuf = time_str.split(':')
+								if len(timebuf) == 3:
+									minutes = int(timebuf[0])*60 + int(timebuf[1])
+									time_str = str(minutes)+':'+timebuf[2]
+								pass
+							pass
+						if 'Results-table-td--F' in field['class']:
+							gender_str = 'F'
+							gender_pos=field.findAll('div')[1].contents[0]
+						pass
+						if 'Results-table-td--M' in field['class']:
+							gender_str = 'M' 
+							gender_pos=field.findAll('div')[1].contents[0]
+						pass
+					if best_result == '':
+						best_result = row.findAll('div')[-1].contents[-1]
+					results.append((event_date, park, str(num), pos, 'A'+runner_id, name, time_str, gender_str, gender_pos, age_group, age_grade, best_result, data_runs))
+				pass
+			pass
+		pass
+	except Exception as e:
+		print(f"exeption: {str(e)}")	
 	return results
 	
 def parkrun_volunteers(country, park, num, reloadVolunteers=False):
 	volunteers = []
-	event_date = '20210101'
-	results_url = country_url(country) + "/" + park + "/results/" + str(num)
-	bs = BeautifulSoup(read_url(results_url, reloadVolunteers), 'html.parser')
-	if bs.body.h3:
-		title = bs.body.h3.findAll('span')
-		if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
-			date_str = title[0].contents[0].split('/')
-			event_date = date_str[2]+date_str[1]+date_str[0]
-	#ptags = bs.findAll('p')
-	ptags = bs.find_all(name='p')
-	for ptag in ptags:
-		classarrt = ptag.get('class')
-		if not classarrt or ( not 'paddedb' in classarrt ):
-			continue
-		pass
-		#refs = ptag.findAll('a')
-		if refs := ptag.findAll('a'):
-			for ref in refs:
-				refhref = ref['href']
-				if 'parkrunner' in refhref:
-					runner_id = 'A'+refhref.split('/')[-1]
-					runner_name = ref.text
-					volunteers.append((event_date, park, str(num), runner_id, runner_name))
+	try:
+		event_date = '19761220'
+		results_url = country_url(country) + "/" + park + "/results/" + str(num)
+		bs = BeautifulSoup(read_url(results_url, reloadVolunteers), 'html.parser')
+		if bs.body.h3:
+			title = bs.body.h3.findAll('span')
+			if (title) and (len(title) > 0) and (len(title[0].contents) > 0):
+				date_str = title[0].contents[0].split('/')
+				event_date = date_str[2]+date_str[1]+date_str[0]
+		ptags = bs.find_all(name='p')
+		for ptag in ptags:
+			classarrt = ptag.get('class')
+			if not classarrt or ( not 'paddedb' in classarrt ):
+				continue
+			pass
+			if refs := ptag.findAll('a'):
+				for ref in refs:
+					refhref = ref['href']
+					if 'parkrunner' in refhref:
+						runner_id = 'A'+refhref.split('/')[-1]
+						runner_name = ref.text
+						volunteers.append((event_date, park, str(num), runner_id, runner_name))
+					pass
 				pass
 			pass
 		pass
+	except Exception as e:
+		print(f"exeption: {str(e)}")	
 	return volunteers 
 	
 	
@@ -271,7 +309,7 @@ def parkrun_volonteers_by_date(country, park, event_date, reloadHistory = False)
 	events = park_history(country, park, reloadHistory)
 	for info in events:
 		if info[0] == event_date:
-			volonteers = parkrun_volonteers(country, park, info[1])
+			volonteers = parkrun_volunteers(country, park, info[1])
 			break
 	return volonteers
 
@@ -403,11 +441,19 @@ def save_parkrun_volunteers(country, park, reloadHistory = False, reloadVoluntee
 		ofs.write(resstr)			
 		
 		
-def save_country_results(country, reloadHistory = False, reloadVolunteers=False):
+def save_country_results(country, reloadHistory = False, reloadVolunteers=False, eventdate = None):
 	parks = get_all_parks(country, False, reloadHistory)
 	for park in parks:
+		if 'juniors' in park:
+			print(f"skip juniors event {park}")
+			continue
+		if eventdate and is_results_saved(country, park, eventdate):
+			print(f"result for {eventdate} is already saved in {park} ")
+			continue
+		pass
 		save_parkrun_results(country, park, reloadHistory)
-		save_parkrun_volunteers(country, park, reloadHistory, reloadVolunteers)
+		#save_parkrun_volunteers(country, park, reloadHistory, reloadVolunteers)
+	return
 	
 		
 def save_results_by_date(country, eventdate, latest=False, skipNoResults=False):
@@ -465,23 +511,53 @@ def remove_results_from_country(country, eventdate):
 def remove_results_by_date(eventdate):
 	for country in all_countries():
 		remove_results_from_country(country, eventdate)
-		
+
+def is_results_saved(country, park, eventdate):
+	dir_name = create_country_dir(country)
+	filename = park + '_results.txt'
+	file_path = os.path.join(dir_name, filename)
+	if os.path.exists(file_path):
+		ifs = open(file_path)
+		saved_results = ifs.read()
+		test_str = str(eventdate) + '\t' + park
+		if test_str in saved_results:
+			return True	
+	return False
+
+def load_proxies(filename:str):
+	if ifs := open(filename, 'r'):
+		for row in ifs:
+			data_flds = row.split(':')
+			if data_flds and len(data_flds) > 3:
+				proxies.append({
+					'ip'  : data_flds[0],
+					'port' : data_flds[1],
+					'username' : data_flds[2],
+					'password' : data_flds[3].replace('\n', '')
+				})
+			pass
+		pass
+	else:
+		print(f"cannot load proxies from file {filename}")
+	return
 
 def main(args):
 	argparser = argparse.ArgumentParser(description="download parkrun results")
 	argparser.add_argument("--country", help="country results")
 	argparser.add_argument("--date", help="results by date")
+	argparser.add_argument("--proxylist", help="file with proxies")
 	args = argparser.parse_args()
 	country_results = args.country if args.country else None
 	event_date = args.date if args.date else None
-	
+	proxyfile = args.proxylist if args.proxylist else 'proxies.txt'
+	load_proxies(filename=proxyfile)
 	print(f"country={country_results}, date={event_date}")
 	if event_date:
 		for country in all_countries():
 			if (not country_results) or (country_results == country):
 				print(f"process country {country} by date {event_date}")
-				save_results_by_date(country, event_date, True)
-				save_country_results(country, False, False)
+				#save_results_by_date(country, event_date, True)
+				save_country_results(country, True, True, event_date)
 			pass
 		pass
 	else:
