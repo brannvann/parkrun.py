@@ -3,3 +3,4 @@ urlcache
 logs
 .vscode/launch.json
 proxies.txt
+settings.json

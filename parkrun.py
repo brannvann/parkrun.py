@@ -10,6 +10,7 @@ import os.path
 from urllib.error import HTTPError
 import argparse
 import random
+import json
 
 import requests
 from requests.auth import HTTPProxyAuth
@@ -22,6 +23,37 @@ safe_headers = {
 }
 
 debug_print = True
+
+parser_settings = { 'last_park' : {}, 'percentage' : {} }
+settings_filename = 'settings.json'
+
+# загрузить текущие настройки из файла
+def load_settings():
+	global parser_settings
+	try:
+		with open(settings_filename, "r") as ifs:
+			parser_settings = json.load(ifs)
+		if 'last_park' not in parser_settings.keys():
+			parser_settings['last_park'] = {}
+		if 'percentage' not in parser_settings.keys():
+			parser_settings['percentage'] = {}
+	except:
+		print(f"cannot read data from {settings_filename}")
+	return    
+
+# сохранить текущие настройки в файл
+def save_settings(country:str, park:str, percentage:float=0.0):
+	parser_settings['last_park'][country] = park
+	parser_settings['percentage'][country] = round(percentage,2)
+	with open(settings_filename, "w") as ofs:
+		json.dump(parser_settings, ofs)
+	return
+
+# последний обработанный парк в текущий или прошлый запуск
+def latest_processed_park(country:str)->str:
+	if country in parser_settings['last_park'].keys():
+		return parser_settings['last_park'][country]
+	return None
 
 def country_url(country):
 	country = country.lower()
@@ -46,7 +78,8 @@ def country_url(country):
 		(['sg', 'singapore', 'сингапур'],'https://www.parkrun.sg'),
 		(['za', 'south africa', 'южная африка'],'https://www.parkrun.co.za'),
 		(['se', 'sweden', 'швеция'],'https://www.parkrun.se'),
-		(['us', 'usa', 'сша'],'https://www.parkrun.us')
+		(['us', 'usa', 'сша'],'https://www.parkrun.us'),
+		(['lt', 'lithuania', 'литва'],'https://www.parkrun.lt')
 	]
 	for park in parks:
 		if country in park[0]:
@@ -122,7 +155,7 @@ def all_countries():
 #	'ru', 
 	'it','de', 'no', 'au', 'at', 'se',
 	'ca','dk','fi','fr','jp','my', 
-	'nl','nz', 'pl','sg', 'za', 'us','uk','ie' ]
+	'nl','nz', 'pl','sg', 'za', 'us','uk','ie','lt' ]
 	return countries 
 	
 		
@@ -441,17 +474,24 @@ def save_parkrun_volunteers(country, park, reloadHistory = False, reloadVoluntee
 		ofs.write(resstr)			
 		
 		
-def save_country_results(country, reloadHistory = False, reloadVolunteers=False, eventdate = None):
+def save_country_results(country, reloadHistory = False, reloadVolunteers=False, eventdate = None, continue_parsing=False):
 	parks = get_all_parks(country, False, reloadHistory)
-	for park in parks:
+	parks_count = len(parks)
+	last_park = latest_processed_park(country)
+	for (indx, park) in enumerate(parks):
+		if continue_parsing and last_park and (park < last_park):
+			continue
+		skip_park = False
 		if 'juniors' in park:
 			print(f"skip juniors event {park}")
-			continue
-		if eventdate and is_results_saved(country, park, eventdate):
+			skip_park = True
+		if (not skip_park) and eventdate and is_results_saved(country, park, eventdate):
 			print(f"result for {eventdate} is already saved in {park} ")
-			continue
+			skip_park = True
+		if not skip_park:
+			save_parkrun_results(country, park, reloadHistory)
 		pass
-		save_parkrun_results(country, park, reloadHistory)
+		save_settings(country=country, park=park, percentage=(indx / parks_count) if (parks_count != 0) else 0)
 		#save_parkrun_volunteers(country, park, reloadHistory, reloadVolunteers)
 	return
 	
@@ -546,26 +586,18 @@ def main(args):
 	argparser.add_argument("--country", help="country results")
 	argparser.add_argument("--date", help="results by date")
 	argparser.add_argument("--proxylist", help="file with proxies")
+	argparser.add_argument("-c", "--continue_parsing", help="continue previous task", action="store_true")
 	args = argparser.parse_args()
 	country_results = args.country if args.country else None
 	event_date = args.date if args.date else None
+	continue_parsing = args.continue_parsing
 	proxyfile = args.proxylist if args.proxylist else 'proxies.txt'
 	load_proxies(filename=proxyfile)
+	load_settings()
 	print(f"country={country_results}, date={event_date}")
-	if event_date:
-		for country in all_countries():
-			if (not country_results) or (country_results == country):
-				print(f"process country {country} by date {event_date}")
-				#save_results_by_date(country, event_date, True)
-				save_country_results(country, True, True, event_date)
-			pass
-		pass
-	else:
-		for country in all_countries():
-			if (not country_results) or (country_results == country):
-				print(f"process all results for country {country}")
-				save_country_results(country, True, True)
-			pass
+	for country in all_countries():
+		if (not country_results) or (country_results == country):
+			save_country_results(country, True, True, eventdate=event_date, continue_parsing=continue_parsing)
 		pass
 	pass
 
